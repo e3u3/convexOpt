@@ -131,6 +131,8 @@ def printResults(A, b, x, typeMessage):
 
     print("L1Norm(A.dot(x)-b) = ", utilities.L1Norm(Adotxb1))
     print("LInfNorm(A.dot(x)-b) = ", utilities.LInfNorm(Adotxb1))
+
+    print("L2Norm(A.dot(x)-b) = ", utilities.L2Norm(Adotxb1))
     print("\n-------------------------------------------------------------------------------------------------------\n")
 
 
