@@ -39,7 +39,7 @@ def plot_train_test_errors(train_errors, test_errors, lmbda_values):
     plt.show()
 
 
-def getIterationErrors(problem, tempFile, outFile):
+def getIterationErrors(problem, tempFile, column):
     originalOut = sys.stdout
     sys.stdout = open(tempFile, "w")
     a = problem.solve(verbose=True)
@@ -56,7 +56,7 @@ def getIterationErrors(problem, tempFile, outFile):
             break
         cols = line.split("  ")
 
-        iterationErrors.append(float(cols[4]))
+        iterationErrors.append(float(cols[column]))
     return iterationErrors
 
 
@@ -74,7 +74,7 @@ def solveRegression(A, b, m, n, method=0, lmbda=0.1, showIterationErrors=0, temp
         problem = cp.Problem(cp.Minimize(objective_fn(A, b, x, 0)))
 
     if showIterationErrors:
-        iterationErrors = getIterationErrors(problem, tempFile, outFile)
+        iterationErrors = getIterationErrors(problem, tempFile, 1)
         f = open(outFile, "w")
         f.write("IterationNumber,Errors\n")
         iterCounter = 1
