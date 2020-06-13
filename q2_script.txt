@@ -1,22 +1,37 @@
 import numpy as np, numpy.random as random, cvxpy as cp, matplotlib.pyplot as plt
-import randomMatrix, utilities
 import sys
 
 
-def loss_fn(A, b, x):
+def L1Norm(vector):
+    return np.sum(np.abs(vector))
+
+
+def LInfNorm(vector):
+    return np.max(np.abs(vector))
+
+
+def sumSquares(vector):
+    return np.sum(np.square(vector))
+
+
+def L2Norm(vector):
+    return np.sqrt(sumSquares(vector))
+
+
+def loss_function(A, b, x):
     return cp.pnorm(A @ x - b, p=2) ** 2
 
 
-def regularizer(x, norm=2, pow=2):
+def regularizationTerm(x, norm=2, pow=2):
     return cp.pnorm(x, p=norm) ** pow
 
 
 def objective_fn(A, b, x, lmbda, norm=2, pow=2):
-    return loss_fn(A, b, x) + lmbda * regularizer(x, norm, pow)
+    return loss_function(A, b, x) + lmbda * regularizationTerm(x, norm, pow)
 
 
 def mse(A, b, x):
-    return (1.0 / A.shape[0]) * loss_fn(A, b, x).value
+    return (1.0 / A.shape[0]) * loss_function(A, b, x).value
 
 
 def plot_regularization_path(lmbda_values, x_values):
@@ -29,17 +44,7 @@ def plot_regularization_path(lmbda_values, x_values):
     plt.show()
 
 
-def plot_train_test_errors(train_errors, test_errors, lmbda_values):
-    plt.plot(lmbda_values, train_errors, label="Train error")
-    # plt.plot(lmbda_values, test_errors, label="Test error")
-    plt.xscale("log")
-    plt.legend(loc="upper left")
-    plt.xlabel(r"$\lambda$", fontsize=16)
-    plt.title("Mean Squared Error (MSE)")
-    plt.show()
-
-
-def getIterationErrors(problem, tempFile, column):
+def getObjectiveFn(problem, tempFile, column):
     originalOut = sys.stdout
     sys.stdout = open(tempFile, "w")
     a = problem.solve(verbose=True)
@@ -47,7 +52,7 @@ def getIterationErrors(problem, tempFile, column):
     sys.stdout = originalOut
     f = open(tempFile, "r")
     linenum = 0
-    iterationErrors = []
+    iterationObjectives = []
     for line in f:
         linenum += 1
         if linenum < 5:
@@ -56,8 +61,8 @@ def getIterationErrors(problem, tempFile, column):
             break
         cols = line.split("  ")
 
-        iterationErrors.append(float(cols[column]))
-    return iterationErrors
+        iterationObjectives.append(float(cols[column]))
+    return iterationObjectives
 
 
 def solveRegression(A, b, m, n, method=0, lmbda=0.1, showIterationErrors=0, tempFile="outputs/temp.txt",
@@ -74,11 +79,11 @@ def solveRegression(A, b, m, n, method=0, lmbda=0.1, showIterationErrors=0, temp
         problem = cp.Problem(cp.Minimize(objective_fn(A, b, x, 0)))
 
     if showIterationErrors:
-        iterationErrors = getIterationErrors(problem, tempFile, 1)
+        iterationObjectives = getObjectiveFn(problem, tempFile, 1)
         f = open(outFile, "w")
         f.write("IterationNumber,Errors\n")
         iterCounter = 1
-        for iterError in iterationErrors:
+        for iterError in iterationObjectives:
             f.write(str(iterCounter) + "," + str(iterError) + '\n')
             iterCounter += 1
         f.close()
@@ -86,15 +91,6 @@ def solveRegression(A, b, m, n, method=0, lmbda=0.1, showIterationErrors=0, temp
     else:
         problem.solve()
     return x.value
-
-
-def Part1(A, b, m, n):
-    solveRegression(A, b, m, n, method=0, lmbda=0.1, showIterationErrors=1, tempFile="outputs/temp.txt",
-                    outFile="outputs/2.1iterationErrorMethod0.txt")
-    solveRegression(A, b, m, n, method=1, lmbda=0.1, showIterationErrors=1, tempFile="outputs/temp.txt",
-                    outFile="outputs/2.1iterationErrorMethod1.txt")
-    solveRegression(A, b, m, n, method=2, lmbda=0.1, showIterationErrors=1, tempFile="outputs/temp.txt",
-                    outFile="outputs/2.1iterationErrorMethod2.txt")
 
 
 def LambdasCoordinatewiseWriteFile(xArray, lambdas, filename, multicoordinates=1):
@@ -115,7 +111,74 @@ def LambdasCoordinatewiseWriteFile(xArray, lambdas, filename, multicoordinates=1
     f.close()
 
 
-def Part2(A, b, m, n, lambda_vals):
+def generateStdNormalRandomMatrices(rows, columns):
+    return random.randn(rows, columns)
+
+
+def sparseRN(rows, columns, density):
+    A = generateStdNormalRandomMatrices(rows, columns)
+    sparseA = A.copy()
+    for i in range(rows):
+        for j in range(columns):
+            r = random.uniform(0, 1)
+            if (r > density):
+                sparseA[i, j] = 0
+    return sparseA
+
+
+def gendata_lasso(m=500, n=2500, noise=0, option=1):
+    # function to generate test data for lasso
+    #   Input:  m: no. of observations
+    #           n: no. of features
+    #       noise: standard deviation
+    #      option: 0: no noise
+    #              1: noise added by gaussian distribution
+    #              2: noise added as an outlier (selecting any 1 of the
+    #                 observations)
+    ##
+    x0 = sparseRN(n, 1, 0.05)
+    A = random.randn(m, n)
+    # normalize columns
+    AN = np.square(A)
+    AN = np.sum(AN, axis=0)
+    AN = np.sqrt(AN)
+    AN = 1 / AN
+    A = A.dot(np.diag(AN))
+
+    v = np.sqrt(0.001) * random.randn(m, 1)
+    b = A.dot(x0) + v
+
+    if option == 1:
+        b = b + noise * random.rand(b.shape[0], b.shape[1])
+        return A, b
+
+    if option == 2:
+        randomRow = random.randint(m)
+        b[randomRow] = b[randomRow] + noise * random.uniform(0, 1)
+        return A, b
+
+    return A, b
+
+
+if __name__ == "__main__":
+    random.seed(25)
+    m = 200
+    n = 10
+    A, b = gendata_lasso(m, n)
+    b = np.ndarray.flatten(b)
+    # print("A.shape=", A.shape)
+    # print("b.shape", b.shape)
+    # Part 1
+    solveRegression(A, b, m, n, method=0, lmbda=0.1, showIterationErrors=1, tempFile="temp.txt",
+                    outFile="ObjLSq.txt")
+    solveRegression(A, b, m, n, method=1, lmbda=0.1, showIterationErrors=1, tempFile="temp.txt",
+                    outFile="ObjL2.txt")
+    solveRegression(A, b, m, n, method=2, lmbda=0.1, showIterationErrors=1, tempFile="temp.txt",
+                    outFile="ObjL1.txt")
+
+    lambda_vals = np.logspace(-2, 3, 50)
+    # lambda_vals = range(5, 105, 5)
+    # Part2(A, b, m, n, lambda_vals)
     method_xs = []
     lambdas = []
 
@@ -123,7 +186,7 @@ def Part2(A, b, m, n, lambda_vals):
         x = solveRegression(A, b, m, n, method=1, lmbda=lmbda, showIterationErrors=0)
         method_xs.append(x)
         lambdas.append(lmbda)
-    methodFile = "outputs/2.2.1x.txt"
+    methodFile = "2.2L2Norm_x.txt"
     LambdasCoordinatewiseWriteFile(method_xs, lambdas, methodFile, 1)
 
     AdotXMinusB = []
@@ -132,20 +195,20 @@ def Part2(A, b, m, n, lambda_vals):
     for i in range(len(method_xs)):
         x = method_xs[i]
         lmbda = lambdas[i]
-        # normTwoSq = loss_fn(A, b, x)
-        normTwoSq = utilities.L2Norm(A @ x - b.reshape(m, 1))
-        regularizer = lmbda * (utilities.L2Norm(x))
+        # normTwoSq = loss_function(A, b, x)
+        normTwoSq = L2Norm(A @ x - b.reshape(m, 1))
+        regularizer = lmbda * (L2Norm(x))
         normTwoSqPlusReg = normTwoSq + regularizer
         AdotXMinusB.append(normTwoSq)
         L2Norms.append(regularizer)
         L2NormPlusRegs.append(normTwoSqPlusReg)
-    methodFile = "outputs/2.2.1L2Adotxminusb.txt"
+    methodFile = "2.2L2Norm_Adotxminusb.txt"
     LambdasCoordinatewiseWriteFile(AdotXMinusB, lambdas, methodFile, 0)
 
-    methodFile = "outputs/2.2.1L2regularizer.txt"
+    methodFile = "2.2L2Norm_regularizer.txt"
     LambdasCoordinatewiseWriteFile(L2Norms, lambdas, methodFile, 0)
 
-    methodFile = "outputs/2.2.1L2NormPlusRegularizer.txt"
+    methodFile = "2.2L2Norm_L2NormPlusRegularizer.txt"
     LambdasCoordinatewiseWriteFile(L2NormPlusRegs, lambdas, methodFile, 0)
 
     method_xs = []
@@ -155,7 +218,7 @@ def Part2(A, b, m, n, lambda_vals):
         x = solveRegression(A, b, m, n, method=2, lmbda=lmbda, showIterationErrors=0)
         method_xs.append(x)
         lambdas.append(lmbda)
-    methodFile = "outputs/2.2.2x.txt"
+    methodFile = "2.2L1Norm_x.txt"
     LambdasCoordinatewiseWriteFile(method_xs, lambdas, methodFile)
 
     AdotXMinusB = []
@@ -164,112 +227,97 @@ def Part2(A, b, m, n, lambda_vals):
     for i in range(len(method_xs)):
         x = method_xs[i]
         lmbda = lambdas[i]
-        # normTwoSq = loss_fn(A, b, x)
-        normTwoSq = utilities.L2Norm(A.dot(x) - b.reshape(m, 1))
-        regularizer = lmbda * (utilities.L1Norm(x))
+        # normTwoSq = loss_function(A, b, x)
+        normTwoSq = L2Norm(A.dot(x) - b.reshape(m, 1))
+        regularizer = lmbda * (L1Norm(x))
         normTwoSqPlusReg = normTwoSq + regularizer
         AdotXMinusB.append(normTwoSq)
         L2Norms.append(regularizer)
         L2NormPlusRegs.append(normTwoSqPlusReg)
-    methodFile = "outputs/2.2.2L1Adotxminusb.txt"
+    methodFile = "2.2L1Norm_Adotxminusb.txt"
     LambdasCoordinatewiseWriteFile(AdotXMinusB, lambdas, methodFile, 0)
 
-    methodFile = "outputs/2.2.2L1regularizer.txt"
+    methodFile = "2.2L1Norm_L1regularizer.txt"
     LambdasCoordinatewiseWriteFile(L2Norms, lambdas, methodFile, 0)
 
-    methodFile = "outputs/2.2.1L1NormPlusRegularizer.txt"
+    methodFile = "2.2L1Norm_L1NormPlusRegularizer.txt"
     LambdasCoordinatewiseWriteFile(L2NormPlusRegs, lambdas, methodFile, 0)
-
-
-def Part3(m, n, lambda2, lambda3):
-    sigma_min = 0.1
-    sigma_step = 0.1
-    method1Errors=[]
-    method2Errors = []
-    method3Errors = []
-    sigmas = []
-    for i in range(20):
-        sigma = sigma_min + i * sigma_step
-        sigmas.append(sigma)
-        A, b = randomMatrix.gendata_lasso(m, n,sigma,1)
-        b = np.ndarray.flatten(b)
-        x = solveRegression(A, b, m, n, method=0)
-        rmse_error = np.sqrt(mse(A, b, x))
-        method1Errors.append(rmse_error)
-
-        x = solveRegression(A, b, m, n, method=1, lmbda=lambda2)
-        rmse_error = np.sqrt(mse(A, b, x))
-        method2Errors.append(rmse_error)
-
-        x = solveRegression(A, b, m, n, method=2, lmbda=lambda3)
-        rmse_error = np.sqrt(mse(A, b, x))
-        method3Errors.append(rmse_error)
-    f = open("outputs/2.iii.txt","w")
-    f.write("Sigma,RMSE_LSQ,RMSE_L2Norm,RMSE_L1Norm\n")
-    for i in range(20):
-        sigma = sigmas[i]
-        m1e = method1Errors[i]
-        m2e = method2Errors[i]
-        m3e = method3Errors[i]
-        f.write(str(sigma)+","+str(m1e)+","+str(m2e)+","+str(m3e)+"\n")
-
-    f.close()
-
-def Part4(m, n, lambda2, lambda3):
-    sigma_min = 0.1
-    sigma_step = 0.1
-    method1Errors=[]
-    method2Errors = []
-    method3Errors = []
-    sigmas = []
-    for i in range(20):
-        sigma = sigma_min + i * sigma_step
-        sigmas.append(sigma)
-        A, b = randomMatrix.gendata_lasso(m, n,sigma,2)
-        b = np.ndarray.flatten(b)
-        x = solveRegression(A, b, m, n, method=0)
-        rmse_error = np.sqrt(mse(A, b, x))
-        method1Errors.append(rmse_error)
-
-        x = solveRegression(A, b, m, n, method=1, lmbda=lambda2)
-        rmse_error = np.sqrt(mse(A, b, x))
-        method2Errors.append(rmse_error)
-
-        x = solveRegression(A, b, m, n, method=2, lmbda=lambda3)
-        rmse_error = np.sqrt(mse(A, b, x))
-        method3Errors.append(rmse_error)
-    f = open("outputs/2.iv.txt","w")
-    f.write("Sigma,RMSE_LSQ,RMSE_L2Norm,RMSE_L1Norm\n")
-    for i in range(20):
-        sigma = sigmas[i]
-        m1e = method1Errors[i]
-        m2e = method2Errors[i]
-        m3e = method3Errors[i]
-        f.write(str(sigma)+","+str(m1e)+","+str(m2e)+","+str(m3e)+"\n")
-
-    f.close()
-
-
-
-
-
-if __name__ == "__main__":
-    random.seed(8)
-    m = 200
-    n = 10
-    A, b = randomMatrix.gendata_lasso(m, n)
-    b = np.ndarray.flatten(b)
-    # print("A.shape=", A.shape)
-    # print("b.shape", b.shape)
-
-    Part1(A, b, m, n)
-    lambda_vals = np.logspace(-2, 3, 50)
-    # lambda_vals = range(5, 105, 5)
-    Part2(A, b, m, n, lambda_vals)
 
     # For Part 3, we will use lambda = 2.25 for Part 2 and lambda = 0.1 for part 3
 
-    Part3(200, 50, 2.25, 0.1)
+    # Part3(200, 50, 2.25, 0.1)
+    m = 300
+    n = 50
+    lambda2 = 2.25
+    lambda3 = 0.1
 
-    Part4(200, 50, 2.25, 0.1)
+    sigma_min = 0.1
+    sigma_step = 0.1
+    method1Errors = []
+    method2Errors = []
+    method3Errors = []
+    sigmas = []
+    for i in range(20):
+        sigma = sigma_min + i * sigma_step
+        sigmas.append(sigma)
+        A, b = gendata_lasso(m, n, sigma, 1)
+        b = np.ndarray.flatten(b)
+        x = solveRegression(A, b, m, n, method=0)
+        rmse_error = np.sqrt(mse(A, b, x))
+        method1Errors.append(rmse_error)
 
+        x = solveRegression(A, b, m, n, method=1, lmbda=lambda2)
+        rmse_error = np.sqrt(mse(A, b, x))
+        method2Errors.append(rmse_error)
+
+        x = solveRegression(A, b, m, n, method=2, lmbda=lambda3)
+        rmse_error = np.sqrt(mse(A, b, x))
+        method3Errors.append(rmse_error)
+    f = open("ErrorsvsSigma3.txt", "w")
+    f.write("Sigma,RMSE_LSQ,RMSE_L2Norm,RMSE_L1Norm\n")
+    for i in range(20):
+        sigma = sigmas[i]
+        m1e = method1Errors[i]
+        m2e = method2Errors[i]
+        m3e = method3Errors[i]
+        f.write(str(sigma) + "," + str(m1e) + "," + str(m2e) + "," + str(m3e) + "\n")
+
+    f.close()
+
+    # Part4(200, 50, 2.25, 0.1)
+    m = 300;
+    n = 50;
+    lambda2 = 2.25;
+    lambda3 = 0.1
+    sigma_min = 0.1
+    sigma_step = 0.1
+    method1Errors = []
+    method2Errors = []
+    method3Errors = []
+    sigmas = []
+    for i in range(20):
+        sigma = sigma_min + i * sigma_step
+        sigmas.append(sigma)
+        A, b = gendata_lasso(m, n, sigma, 2)
+        b = np.ndarray.flatten(b)
+        x = solveRegression(A, b, m, n, method=0)
+        rmse_error = np.sqrt(mse(A, b, x))
+        method1Errors.append(rmse_error)
+
+        x = solveRegression(A, b, m, n, method=1, lmbda=lambda2)
+        rmse_error = np.sqrt(mse(A, b, x))
+        method2Errors.append(rmse_error)
+
+        x = solveRegression(A, b, m, n, method=2, lmbda=lambda3)
+        rmse_error = np.sqrt(mse(A, b, x))
+        method3Errors.append(rmse_error)
+    f = open("ErrorsvsSigma4.txt", "w")
+    f.write("Sigma,RMSE_LSQ,RMSE_L2Norm,RMSE_L1Norm\n")
+    for i in range(20):
+        sigma = sigmas[i]
+        m1e = method1Errors[i]
+        m2e = method2Errors[i]
+        m3e = method3Errors[i]
+        f.write(str(sigma) + "," + str(m1e) + "," + str(m2e) + "," + str(m3e) + "\n")
+
+    f.close()
