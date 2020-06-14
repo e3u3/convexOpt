@@ -91,3 +91,36 @@ def generateCompleteBipartite(k1, k2):
             out[f, s] = 1
             out[s, f] = 1
     return out
+
+
+def svm_gendata(Np, Nn,distance):
+    Xp = np.array([[2, -1], [2, 1]]) / np.sqrt(2) @ random.randn(2, Np)
+    Xp[0, :] = Xp[0, :] + distance
+    yp = np.ones(Np)
+
+    Xn = np.array([[2, -1], [2, 1]]) / np.sqrt(2) @ random.randn(2, Nn)
+    Xn[0, :] = Xn[0, :] - distance
+
+    yn = - np.ones(Nn)
+
+    X = np.hstack((Xp, Xn))
+    y = np.hstack((yp, yn))
+
+    return X, y
+
+def svm_gendata2(Np, Nn,distance):
+    Xp = np.array([[2, -1], [2, 1]]) / np.sqrt(2) @ random.randn(2, Np)
+    Xp[0, :] = Xp[0, :] + distance
+    Xp[1, :] = Xp[1, :] - distance
+    yp = np.ones(Np)
+
+    Xn = np.array([[2, -1], [2, 1]]) / np.sqrt(2) @ random.randn(2, Nn)
+    Xn[0, :] = Xn[0, :] - distance
+    Xn[1, :] = Xn[1, :] + distance
+
+    yn = - np.ones(Nn)
+
+    X = np.hstack((Xp, Xn))
+    y = np.hstack((yp, yn))
+
+    return X, y

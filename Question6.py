@@ -1,7 +1,5 @@
 import numpy as np, cvxpy as cp, numpy.random as random
 
-import matplotlib.pyplot as plt
-
 
 def Solver(numVars, method=0):
     mOnes = np.ones(numVars)
